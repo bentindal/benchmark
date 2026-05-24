@@ -1,0 +1,65 @@
+# BenchMark
+
+A social media app where users discover, post, and rate public benches. Think Strava meets Instagram — but for benches.
+
+**Design:** Notion-inspired (clean sans-serif, generous whitespace, block-based layout) with a green/nature palette (forest greens, sage, warm off-whites, earthy tones).
+
+## Tech Stack
+
+- **Frontend:** React Native (Expo SDK 51+, Expo Router, NativeWind, React Query)
+- **Backend:** Ruby on Rails 7 API-only, PostgreSQL, Active Storage, Devise + JWT
+
+## Repository Structure
+
+```
+benchmark/
+  apps/
+    api/        # Rails API
+    mobile/     # Expo React Native app
+  docs/
+  README.md
+```
+
+## Setup
+
+### Backend
+
+```bash
+cd apps/api
+bundle install
+rails db:create db:migrate db:seed
+rails server
+```
+
+### Mobile
+
+```bash
+cd apps/mobile
+npm install
+npx expo start
+```
+
+## Milestones
+
+- [ ] M1: Repository bootstrap
+- [ ] M2: Rails setup (API, CORS, Devise+JWT, Active Storage)
+- [ ] M3: Migrations + Models
+- [ ] M4: Controllers + Routes + Serializers
+- [ ] M5: Seed data
+- [ ] M6: RSpec tests
+- [ ] M7: Expo project setup
+- [ ] M8: Auth screens
+- [ ] M9: API layer + React Query
+- [ ] M10: Feed screen
+- [ ] M11: Bench detail screen
+- [ ] M12: Create bench flow
+- [ ] M13: Explore map screen
+- [ ] M14: Profile screen
+- [ ] M15: React Native tests
+- [ ] M16: Final verification
+
+## Architecture
+
+- Rails API on `localhost:3000`
+- Expo dev server on default Expo port
+- `EXPO_PUBLIC_API_URL=http://localhost:3000/api/v1`
