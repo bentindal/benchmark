@@ -7,7 +7,7 @@ class Users::RegistrationsController < Devise::RegistrationsController
     if request.method == "POST" && resource.persisted?
       render json: {
         status: { code: 200, message: "Signed up successfully." },
-        data: UserBlueprint.render_as_hash(resource)
+        data: UserBlueprint.render_as_hash(resource, view: :normal)
       }, status: :ok
     elsif request.method == "DELETE"
       render json: {
