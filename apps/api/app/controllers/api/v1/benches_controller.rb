@@ -7,7 +7,7 @@ module Api
 
       def index
         benches = params[:sort] == "top_rated" ? Bench.top_rated : Bench.recent
-        benches = paginate(benches.includes(:user, :ratings, :comments, photos_attachments: :blob))
+        benches = paginate(benches).preload(:user, :ratings, :comments, photos_attachments: :blob)
         render json: BenchBlueprint.render_as_hash(benches)
       end
 
