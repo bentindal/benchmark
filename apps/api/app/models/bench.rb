@@ -14,10 +14,10 @@ class Bench < ApplicationRecord
 
   def average_rating
     {
-      view: ratings.average(:view_score)&.round(1),
-      comfort: ratings.average(:comfort_score)&.round(1),
-      location: ratings.average(:location_score)&.round(1),
-      overall: ratings.average(:overall_score)&.round(1)
+      view: ratings.average(:view_score)&.to_f&.round(1),
+      comfort: ratings.average(:comfort_score)&.to_f&.round(1),
+      location: ratings.average(:location_score)&.to_f&.round(1),
+      overall: ratings.average(:overall_score)&.to_f&.round(1)
     }
   end
 
