@@ -1,0 +1,17 @@
+# Rails standard
+apps/api/log/*
+apps/api/tmp/*
+apps/api/storage/*
+apps/api/.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
