@@ -41,20 +41,20 @@ npx expo start
 
 ## Milestones
 
-- [ ] M1: Repository bootstrap
-- [ ] M2: Rails setup (API, CORS, Devise+JWT, Active Storage)
-- [ ] M3: Migrations + Models
-- [ ] M4: Controllers + Routes + Serializers
-- [ ] M5: Seed data
-- [ ] M6: RSpec tests
-- [ ] M7: Expo project setup
-- [ ] M8: Auth screens
-- [ ] M9: API layer + React Query
-- [ ] M10: Feed screen
-- [ ] M11: Bench detail screen
-- [ ] M12: Create bench flow
-- [ ] M13: Explore map screen
-- [ ] M14: Profile screen
+- [x] M1: Repository bootstrap
+- [x] M2: Rails setup (API, CORS, Devise+JWT, Active Storage)
+- [x] M3: Migrations + Models
+- [x] M4: Controllers + Routes + Serializers
+- [x] M5: Seed data
+- [x] M6: RSpec tests (80/80 passing)
+- [x] M7: Expo project setup (NativeWind, fonts, deps)
+- [x] M8: Auth screens (sign-in, sign-up)
+- [x] M9: API layer + React Query + Zustand auth
+- [x] M10: Feed screen with tab switcher
+- [x] M11: Bench detail screen with ratings + comments
+- [x] M12: Create bench flow (3-step form)
+- [x] M13: Explore map screen with nearby
+- [x] M14: Profile screen
 - [ ] M15: React Native tests
 - [ ] M16: Final verification
 

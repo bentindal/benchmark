@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "BenchMark",
+    "slug": "benchmark",
+    "scheme": "benchmark",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f8f6f1"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.benchmark.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "BenchMark uses your location to show nearby benches.",
+        "NSPhotoLibraryUsageDescription": "BenchMark needs access to your photo library to add photos to bench reviews.",
+        "NSCameraUsageDescription": "BenchMark needs camera access to take photos of benches."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f8f6f1"
+      },
+      "package": "com.benchmark.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow BenchMark to use your location."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow BenchMark to access your photos.",
+          "cameraPermission": "Allow BenchMark to access your camera."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
