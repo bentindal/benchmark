@@ -55,8 +55,8 @@ npx expo start
 - [x] M12: Create bench flow (3-step form)
 - [x] M13: Explore map screen with nearby
 - [x] M14: Profile screen
-- [ ] M15: React Native tests
-- [ ] M16: Final verification
+- [x] M15: React Native tests (23/23 passing)
+- [x] M16: Final verification
 
 ## Architecture
 
