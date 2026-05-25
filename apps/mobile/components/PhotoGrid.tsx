@@ -1,4 +1,5 @@
 import { View, Image, TouchableOpacity, Text, Dimensions } from 'react-native';
+import { resolvePhotoUrls } from '../lib/images';
 
 type Props = {
   photos: string[];
@@ -10,6 +11,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 export default function PhotoGrid({ photos, compact = false }: Props) {
   if (photos.length === 0) return null;
 
+  const resolved = resolvePhotoUrls(photos);
   const imageSize = compact
     ? (SCREEN_WIDTH - 48 - 8) / 3
     : SCREEN_WIDTH;
@@ -17,7 +19,7 @@ export default function PhotoGrid({ photos, compact = false }: Props) {
   if (!compact && photos.length === 1) {
     return (
       <Image
-        source={{ uri: photos[0] }}
+        source={{ uri: resolved[0] }}
         style={{ width: SCREEN_WIDTH, height: 260 }}
         resizeMode="cover"
       />
@@ -27,7 +29,7 @@ export default function PhotoGrid({ photos, compact = false }: Props) {
   if (!compact && photos.length === 2) {
     return (
       <View className="flex-row gap-0.5">
-        {photos.map((uri, i) => (
+        {resolved.map((uri, i) => (
           <Image
             key={i}
             source={{ uri }}
@@ -40,11 +42,12 @@ export default function PhotoGrid({ photos, compact = false }: Props) {
   }
 
   const displayed = compact ? photos.slice(0, 3) : photos.slice(0, 4);
+  const displayedResolved = resolvePhotoUrls(displayed);
   const remaining = photos.length - displayed.length;
 
   return (
     <View className="flex-row flex-wrap gap-1">
-      {displayed.map((uri, i) => (
+      {displayedResolved.map((uri, i) => (
         <TouchableOpacity
           key={i}
           activeOpacity={0.85}

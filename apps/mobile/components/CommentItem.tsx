@@ -1,6 +1,7 @@
 import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import type { CommentItem } from '../lib/api';
+import { resolvePhotoUrl } from '../lib/images';
 
 type Props = {
   comment: CommentItem;
@@ -17,7 +18,7 @@ export default function CommentItemComp({ comment }: Props) {
       >
         <View className="w-8 h-8 rounded-full bg-bench-sage items-center justify-center mr-2 overflow-hidden">
           {comment.user.avatar_url ? (
-            <Image source={{ uri: comment.user.avatar_url }} className="w-full h-full" />
+            <Image source={{ uri: resolvePhotoUrl(comment.user.avatar_url) }} className="w-full h-full" />
           ) : (
             <Text className="text-sm">👤</Text>
           )}

@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { userApi, authApi, type BenchItem } from '../../lib/api';
+import { resolvePhotoUrl } from '../../lib/images';
 import { useAuthStore } from '../../lib/auth';
 import BenchCard from '../../components/BenchCard';
 
@@ -59,7 +60,7 @@ export default function ProfileScreen() {
                 }}
               >
                 {profile.avatar_url ? (
-                  <Image source={{ uri: profile.avatar_url }} style={{ width: 80, height: 80 }} />
+                  <Image source={{ uri: resolvePhotoUrl(profile.avatar_url) }} style={{ width: 80, height: 80 }} />
                 ) : (
                   <Text style={{ fontSize: 32 }}>👤</Text>
                 )}

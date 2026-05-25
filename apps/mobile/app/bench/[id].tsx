@@ -17,6 +17,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MapView, { Marker } from 'react-native-maps';
 import { benchApi, ratingApi, commentApi, type CommentItem } from '../../lib/api';
+import { resolvePhotoUrl, resolvePhotoUrls } from '../../lib/images';
 import { useAuthStore } from '../../lib/auth';
 import RatingStars from '../../components/RatingStars';
 
@@ -137,7 +138,7 @@ export default function BenchDetailScreen() {
         {/* Photo carousel */}
         {bench.photos_urls.length > 0 ? (
           <FlatList
-            data={bench.photos_urls}
+            data={resolvePhotoUrls(bench.photos_urls)}
             keyExtractor={(uri, i) => `${uri}-${i}`}
             horizontal
             pagingEnabled
@@ -200,7 +201,7 @@ export default function BenchDetailScreen() {
           >
             {bench.user.avatar_url ? (
               <Image
-                source={{ uri: bench.user.avatar_url }}
+                source={{ uri: resolvePhotoUrl(bench.user.avatar_url) }}
                 style={{ width: 24, height: 24, borderRadius: 12 }}
               />
             ) : (

@@ -3,12 +3,15 @@ import { router } from 'expo-router';
 import type { BenchItem } from '../lib/api';
 import RatingStars from './RatingStars';
 
+import { resolvePhotoUrl, resolvePhotoUrls } from '../lib/images';
+
 type Props = {
   bench: BenchItem;
 };
 
 export default function BenchCard({ bench }: Props) {
-  const photo = bench.photos_urls[0];
+  const photos = resolvePhotoUrls(bench.photos_urls);
+  const photo = photos[0];
   const overall = bench.average_rating?.overall;
 
   return (
@@ -93,7 +96,7 @@ export default function BenchCard({ bench }: Props) {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 }}>
           {bench.user.avatar_url ? (
             <Image
-              source={{ uri: bench.user.avatar_url }}
+              source={{ uri: resolvePhotoUrl(bench.user.avatar_url) }}
               style={{ width: 18, height: 18, borderRadius: 9 }}
             />
           ) : (
