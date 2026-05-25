@@ -22,8 +22,8 @@ module Api
 
       def create
         bench = current_user.benches.build(bench_params)
+        bench.photos.attach(params[:photos]) if params[:photos]
         if bench.save
-          bench.photos.attach(params[:photos]) if params[:photos]
           render json: BenchBlueprint.render_as_hash(bench), status: :created
         else
           render json: { errors: bench.errors.full_messages }, status: :unprocessable_entity

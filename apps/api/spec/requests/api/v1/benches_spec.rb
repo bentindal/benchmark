@@ -64,36 +64,44 @@ RSpec.describe "Benches", type: :request do
   describe "POST /api/v1/benches" do
     include_context "authenticated user"
 
+    let(:photo) { fixture_file_upload(Rails.root.join("spec/fixtures/files/test.jpg"), "image/jpeg") }
     let(:valid_params) do
       {
         title: "Central Park Bench",
         description: "A lovely bench",
         latitude: 40.7829,
         longitude: -73.9654,
-        location_name: "Central Park, NYC"
+        location_name: "Central Park, NYC",
+        photos: [photo]
       }
     end
 
     it "creates a bench when authenticated" do
-      expect { post "/api/v1/benches", params: valid_params, headers: auth_headers, as: :json }
+      expect { post "/api/v1/benches", params: valid_params, headers: auth_headers }
         .to change(Bench, :count).by(1)
       expect(response).to have_http_status(:created)
     end
 
     it "associates the bench with the current user" do
-      post "/api/v1/benches", params: valid_params, headers: auth_headers, as: :json
+      post "/api/v1/benches", params: valid_params, headers: auth_headers
       expect(json_body["user"]["id"]).to eq(user.id)
     end
 
     it "returns 401 without auth" do
-      post "/api/v1/benches", params: valid_params, as: :json
+      post "/api/v1/benches", params: valid_params
       expect(response).to have_http_status(:unauthorized)
     end
 
     it "returns 422 for invalid params" do
-      post "/api/v1/benches", params: { title: "" }, headers: auth_headers, as: :json
+      post "/api/v1/benches", params: { title: "", photos: [photo] }, headers: auth_headers
       expect(response).to have_http_status(:unprocessable_entity)
       expect(json_body["errors"]).to be_present
+    end
+
+    it "rejects creation without photos" do
+      post "/api/v1/benches", params: { title: "No Photo", latitude: 51.5, longitude: -0.1 }, headers: auth_headers
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(json_body["errors"]).to include("Photos must have at least one photo")
     end
   end
 

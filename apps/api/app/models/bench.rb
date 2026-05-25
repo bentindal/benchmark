@@ -8,6 +8,7 @@ class Bench < ApplicationRecord
   validates :latitude, presence: true
   validates :longitude, presence: true
   validate :photos_count_limit
+  validate :must_have_at_least_one_photo, on: :create
 
   scope :recent, -> { order(created_at: :desc) }
   scope :top_rated, -> { joins(:ratings).group(:id).order("AVG(ratings.overall_score) DESC") }
@@ -45,5 +46,9 @@ class Bench < ApplicationRecord
 
   def photos_count_limit
     errors.add(:photos, "can't exceed 5") if photos.count > 5
+  end
+
+  def must_have_at_least_one_photo
+    errors.add(:photos, "must have at least one photo") unless photos.attached?
   end
 end
