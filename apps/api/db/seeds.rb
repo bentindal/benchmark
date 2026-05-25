@@ -18,12 +18,13 @@ user_data = [
 user_data.each do |ud|
   user = User.find_or_initialize_by(username: ud[:username])
   if user.new_record?
-    user.email = ud[:email]
     user.password = "password123"
     user.password_confirmation = "password123"
     user.bio = Faker::Quote.famous_last_words
-    user.save!
   end
+  # Keep the canonical seed email in sync (it's the login key) for existing users too.
+  user.email = ud[:email]
+  user.save!
   users << user
 end
 
