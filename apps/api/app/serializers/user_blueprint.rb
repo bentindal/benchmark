@@ -5,7 +5,7 @@ class UserBlueprint < Blueprinter::Base
     fields :username
     field :avatar_url do |user|
       if user.respond_to?(:avatar) && user.avatar.attached?
-        Rails.application.routes.url_helpers.rails_blob_path(user.avatar, only_path: true)
+        Rails.application.routes.url_helpers.rails_blob_url(user.avatar)
       end
     end
   end
