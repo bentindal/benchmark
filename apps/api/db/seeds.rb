@@ -1,35 +1,30 @@
 require "open-uri"
 
-puts "Clearing existing data..."
-Comment.destroy_all
-Rating.destroy_all
-Follow.destroy_all
-Bench.destroy_all
-User.destroy_all
-
 puts "Creating users..."
 
 users = []
 
 user_data = [
   { first: "Ben", last: "Tindal", username: "bentindal", email: "ben@tindal.dev" },
-  { first: "Rhys", last: "Morgan", username: "rhys_morgan", email: Faker::Internet.unique.email },
-  { first: "Sioned", last: "Williams", username: "sioned_w", email: Faker::Internet.unique.email },
-  { first: "Gethin", last: "Davies", username: "gethin_davies", email: Faker::Internet.unique.email },
-  { first: "Nia", last: "Evans", username: "nia_evans", email: Faker::Internet.unique.email },
-  { first: "Owain", last: "Jones", username: "owain_jones", email: Faker::Internet.unique.email },
-  { first: "Catrin", last: "Hughes", username: "catrin_hughes", email: Faker::Internet.unique.email },
-  { first: "Iwan", last: "Roberts", username: "iwan_roberts", email: Faker::Internet.unique.email },
+  { first: "Rhys", last: "Morgan", username: "rhys_morgan", email: "rhys_morgan@example.com" },
+  { first: "Sioned", last: "Williams", username: "sioned_w", email: "sioned_w@example.com" },
+  { first: "Gethin", last: "Davies", username: "gethin_davies", email: "gethin_davies@example.com" },
+  { first: "Nia", last: "Evans", username: "nia_evans", email: "nia_evans@example.com" },
+  { first: "Owain", last: "Jones", username: "owain_jones", email: "owain_jones@example.com" },
+  { first: "Catrin", last: "Hughes", username: "catrin_hughes", email: "catrin_hughes@example.com" },
+  { first: "Iwan", last: "Roberts", username: "iwan_roberts", email: "iwan_roberts@example.com" },
 ]
 
 user_data.each do |ud|
-  users << User.create!(
-    username: ud[:username],
-    email: ud[:email],
-    password: "password123",
-    password_confirmation: "password123",
-    bio: Faker::Quote.famous_last_words
-  )
+  user = User.find_or_initialize_by(username: ud[:username])
+  if user.new_record?
+    user.email = ud[:email]
+    user.password = "password123"
+    user.password_confirmation = "password123"
+    user.bio = Faker::Quote.famous_last_words
+    user.save!
+  end
+  users << user
 end
 
 puts "Creating benches..."
@@ -106,27 +101,30 @@ bench_descriptions = [
 benches = []
 
 locations.each_with_index do |loc, i|
-  bench = Bench.create!(
-    title: bench_titles[i],
-    description: bench_descriptions[i],
-    latitude: loc[:lat],
-    longitude: loc[:lng],
-    location_name: loc[:name],
-    user: users.sample
-  )
+  bench = Bench.find_or_initialize_by(title: bench_titles[i])
 
-  photo_count = rand(2..5)
-  photo_count.times do |p|
-    url = "https://picsum.photos/seed/bench#{i + 1}_#{p + 1}/800/600"
-    begin
-      bench.photos.attach(
-        io: URI.open(url),
-        filename: "bench_#{i + 1}_photo_#{p + 1}.jpg",
-        content_type: "image/jpeg"
-      )
-    rescue => e
-      puts "  Warning: could not attach photo #{p + 1} for bench #{i + 1}: #{e.message}"
+  if bench.new_record?
+    bench.description = bench_descriptions[i]
+    bench.latitude = loc[:lat]
+    bench.longitude = loc[:lng]
+    bench.location_name = loc[:name]
+    bench.user = users.sample
+
+    photo_count = rand(2..5)
+    photo_count.times do |p|
+      url = "https://picsum.photos/seed/bench#{i + 1}_#{p + 1}/800/600"
+      begin
+        bench.photos.attach(
+          io: URI.open(url),
+          filename: "bench_#{i + 1}_photo_#{p + 1}.jpg",
+          content_type: "image/jpeg"
+        )
+      rescue => e
+        puts "  Warning: could not attach photo #{p + 1} for bench #{i + 1}: #{e.message}"
+      end
     end
+
+    bench.save!
   end
 
   benches << bench
@@ -175,6 +173,8 @@ comment_pool = [
 ratings_created = 0
 
 benches.each do |bench|
+  next if bench.ratings.any?
+
   rating_users = users.sample(rand(3..8))
   rating_users.each do |u|
     Rating.create!(
@@ -194,6 +194,8 @@ puts "Creating comments..."
 comments_created = 0
 
 benches.each do |bench|
+  next if bench.comments.any?
+
   comment_count = rand(3..10)
   comment_count.times do
     Comment.create!(
