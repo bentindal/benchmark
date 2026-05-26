@@ -5,10 +5,13 @@ module Api
       before_action :set_user
 
       def show
-        benches = paginate(@user.benches.recent.includes(:ratings, :comments, photos_attachments: :blob))
+        preload = { discoverer: {}, visits: { photos_attachments: :blob } }
+        discovered = @user.discovered_benches.recent.includes(preload)
+        visited = @user.benches.distinct.recent.includes(preload)
         render json: {
           user: UserBlueprint.render_as_hash(@user, view: :normal),
-          benches: BenchBlueprint.render_as_hash(benches)
+          discovered: BenchBlueprint.render_as_hash(discovered),
+          visited: BenchBlueprint.render_as_hash(visited)
         }
       end
 

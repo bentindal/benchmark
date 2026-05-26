@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, FlatList, Image, ActivityIndicator } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { userApi, authApi, type BenchItem } from '../../lib/api';
+import { userApi, type BenchItem } from '../../lib/api';
 import { resolvePhotoUrl } from '../../lib/images';
 import { useAuthStore } from '../../lib/auth';
 import BenchCard from '../../components/BenchCard';
@@ -30,18 +30,15 @@ export default function ProfileScreen() {
   }
 
   const profile = data?.user ?? authUser;
-  const benches: BenchItem[] = data?.benches ?? [];
+  const discovered: BenchItem[] = data?.discovered ?? [];
+  const visited: BenchItem[] = data?.visited ?? [];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f6f1' }} edges={['top']}>
       <FlatList
-        data={benches}
-        keyExtractor={(item: BenchItem) => String(item.id)}
-        renderItem={({ item }: { item: BenchItem }) => (
-          <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-            <BenchCard bench={item} />
-          </View>
-        )}
+        data={[]}
+        keyExtractor={() => ''}
+        renderItem={null}
         contentContainerStyle={{ paddingBottom: 32 }}
         ListHeaderComponent={
           <>
@@ -89,10 +86,18 @@ export default function ProfileScreen() {
               <View style={{ flexDirection: 'row', gap: 32, marginTop: 16 }}>
                 <View style={{ alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: '#1b4332' }}>
-                    {profile.benches_count ?? benches.length}
+                    {profile.discovered_count ?? discovered.length}
                   </Text>
                   <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
-                    Benches
+                    Discovered
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: '#1b4332' }}>
+                    {profile.visits_count ?? visited.length}
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
+                    Visits
                   </Text>
                 </View>
                 {profile.followers_count != null && (
@@ -102,16 +107,6 @@ export default function ProfileScreen() {
                     </Text>
                     <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
                       Followers
-                    </Text>
-                  </View>
-                )}
-                {profile.following_count != null && (
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: '#1b4332' }}>
-                      {profile.following_count}
-                    </Text>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
-                      Following
                     </Text>
                   </View>
                 )}
@@ -152,41 +147,74 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            {benches.length > 0 && (
-              <Text
-                style={{
-                  fontFamily: 'Inter_600SemiBold',
-                  fontSize: 15,
-                  color: '#1b4332',
-                  paddingHorizontal: 16,
-                  marginBottom: 12,
-                }}
-              >
-                My Benches
-              </Text>
+            {/* Discovered benches */}
+            <Text
+              style={{
+                fontFamily: 'Inter_600SemiBold',
+                fontSize: 15,
+                color: '#1b4332',
+                paddingHorizontal: 16,
+                marginBottom: 12,
+              }}
+            >
+              Discovered{discovered.length > 0 ? ` (${discovered.length})` : ''}
+            </Text>
+            {discovered.length === 0 ? (
+              <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652' }}>
+                  No benches discovered yet.
+                </Text>
+                <TouchableOpacity
+                  style={{
+                    marginTop: 10,
+                    backgroundColor: '#2d6a4f',
+                    borderRadius: 10,
+                    paddingVertical: 10,
+                    paddingHorizontal: 20,
+                    alignSelf: 'flex-start',
+                  }}
+                  onPress={() => router.push('/(tabs)/post')}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#f8f6f1' }}>
+                    Add your first bench
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              discovered.map((item) => (
+                <View key={item.id} style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                  <BenchCard bench={item} />
+                </View>
+              ))
+            )}
+
+            {/* Visited benches */}
+            <Text
+              style={{
+                fontFamily: 'Inter_600SemiBold',
+                fontSize: 15,
+                color: '#1b4332',
+                paddingHorizontal: 16,
+                marginBottom: 12,
+                marginTop: 8,
+              }}
+            >
+              Visited{visited.length > 0 ? ` (${visited.length})` : ''}
+            </Text>
+            {visited.length === 0 ? (
+              <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652' }}>
+                  No visits yet.
+                </Text>
+              </View>
+            ) : (
+              visited.map((item) => (
+                <View key={item.id} style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                  <BenchCard bench={item} />
+                </View>
+              ))
             )}
           </>
-        }
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652' }}>
-              No benches posted yet
-            </Text>
-            <TouchableOpacity
-              style={{
-                marginTop: 12,
-                backgroundColor: '#2d6a4f',
-                borderRadius: 10,
-                paddingVertical: 10,
-                paddingHorizontal: 20,
-              }}
-              onPress={() => router.push('/(tabs)/post')}
-            >
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#f8f6f1' }}>
-                Add your first bench
-              </Text>
-            </TouchableOpacity>
-          </View>
         }
       />
     </SafeAreaView>

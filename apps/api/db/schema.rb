@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_05_24_164934) do
+ActiveRecord::Schema[7.1].define(version: 2026_05_25_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -48,11 +48,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_24_164934) do
     t.decimal "latitude", precision: 10, scale: 7, null: false
     t.decimal "longitude", precision: 10, scale: 7, null: false
     t.string "location_name"
-    t.bigint "user_id", null: false
+    t.bigint "discovered_by_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["discovered_by_id"], name: "index_benches_on_discovered_by_id"
     t.index ["latitude", "longitude"], name: "index_benches_on_latitude_and_longitude"
-    t.index ["user_id"], name: "index_benches_on_user_id"
   end
 
   create_table "comments", force: :cascade do |t|
@@ -75,20 +75,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_24_164934) do
     t.index ["follower_id"], name: "index_follows_on_follower_id"
   end
 
-  create_table "ratings", force: :cascade do |t|
-    t.bigint "user_id", null: false
-    t.bigint "bench_id", null: false
-    t.integer "view_score", null: false
-    t.integer "comfort_score"
-    t.integer "location_score"
-    t.integer "overall_score", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["bench_id"], name: "index_ratings_on_bench_id"
-    t.index ["user_id", "bench_id"], name: "index_ratings_on_user_id_and_bench_id", unique: true
-    t.index ["user_id"], name: "index_ratings_on_user_id"
-  end
-
   create_table "users", force: :cascade do |t|
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false
@@ -106,13 +92,28 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_24_164934) do
     t.index ["username"], name: "index_users_on_username", unique: true
   end
 
+  create_table "visits", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "bench_id", null: false
+    t.text "note"
+    t.integer "view_score"
+    t.integer "comfort_score"
+    t.integer "location_score"
+    t.integer "overall_score"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["bench_id", "created_at"], name: "index_visits_on_bench_id_and_created_at"
+    t.index ["bench_id"], name: "index_visits_on_bench_id"
+    t.index ["user_id"], name: "index_visits_on_user_id"
+  end
+
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
-  add_foreign_key "benches", "users"
+  add_foreign_key "benches", "users", column: "discovered_by_id"
   add_foreign_key "comments", "benches"
   add_foreign_key "comments", "users"
   add_foreign_key "follows", "users", column: "followed_id"
   add_foreign_key "follows", "users", column: "follower_id"
-  add_foreign_key "ratings", "benches"
-  add_foreign_key "ratings", "users"
+  add_foreign_key "visits", "benches"
+  add_foreign_key "visits", "users"
 end

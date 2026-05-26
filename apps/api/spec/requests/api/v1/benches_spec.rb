@@ -18,7 +18,7 @@ RSpec.describe "Benches", type: :request do
 
     it "accepts ?sort=top_rated" do
       rated_bench = benches.first
-      create(:rating, bench: rated_bench, overall_score: 5, view_score: 5)
+      create(:visit, bench: rated_bench, overall_score: 5, view_score: 5)
 
       get "/api/v1/benches", params: { sort: "top_rated" }
       expect(response).to have_http_status(:ok)
@@ -30,11 +30,17 @@ RSpec.describe "Benches", type: :request do
       ids = json_body.map { |b| b["id"] }
       expect(ids).to eq(benches.sort_by(&:created_at).reverse.map(&:id))
     end
+
+    it "exposes the discoverer and visit count" do
+      get "/api/v1/benches"
+      expect(json_body.first).to have_key("discoverer")
+      expect(json_body.first).to have_key("visits_count")
+    end
   end
 
   describe "GET /api/v1/benches/:id" do
     let!(:bench) { create(:bench) }
-    let!(:rating) { create(:rating, bench: bench) }
+    let!(:visit) { create(:visit, bench: bench) }
     let!(:comment) { create(:comment, bench: bench) }
 
     it "returns bench detail" do
@@ -43,10 +49,10 @@ RSpec.describe "Benches", type: :request do
       expect(json_body["bench"]["id"]).to eq(bench.id)
     end
 
-    it "includes ratings" do
+    it "includes visits" do
       get "/api/v1/benches/#{bench.id}"
-      expect(json_body["ratings"]).to be_an(Array)
-      expect(json_body["ratings"].first["id"]).to eq(rating.id)
+      expect(json_body["visits"]).to be_an(Array)
+      expect(json_body["visits"].first["id"]).to eq(visit.id)
     end
 
     it "includes comments" do
@@ -72,19 +78,22 @@ RSpec.describe "Benches", type: :request do
         latitude: 40.7829,
         longitude: -73.9654,
         location_name: "Central Park, NYC",
+        overall_score: 5,
+        view_score: 4,
+        note: "First find!",
         photos: [photo]
       }
     end
 
-    it "creates a bench when authenticated" do
+    it "creates a bench and its first visit when authenticated" do
       expect { post "/api/v1/benches", params: valid_params, headers: auth_headers }
-        .to change(Bench, :count).by(1)
+        .to change(Bench, :count).by(1).and change(Visit, :count).by(1)
       expect(response).to have_http_status(:created)
     end
 
-    it "associates the bench with the current user" do
+    it "records the current user as the discoverer" do
       post "/api/v1/benches", params: valid_params, headers: auth_headers
-      expect(json_body["user"]["id"]).to eq(user.id)
+      expect(json_body["discoverer"]["id"]).to eq(user.id)
     end
 
     it "returns 401 without auth" do
@@ -98,8 +107,10 @@ RSpec.describe "Benches", type: :request do
       expect(json_body["errors"]).to be_present
     end
 
-    it "rejects creation without photos" do
-      post "/api/v1/benches", params: { title: "No Photo", latitude: 51.5, longitude: -0.1 }, headers: auth_headers
+    it "rejects creation without photos and persists nothing" do
+      expect do
+        post "/api/v1/benches", params: { title: "No Photo", latitude: 51.5, longitude: -0.1 }, headers: auth_headers
+      end.to change(Bench, :count).by(0).and change(Visit, :count).by(0)
       expect(response).to have_http_status(:unprocessable_entity)
       expect(json_body["errors"]).to include("Photos must have at least one photo")
     end
@@ -108,10 +119,10 @@ RSpec.describe "Benches", type: :request do
   describe "PATCH /api/v1/benches/:id" do
     include_context "authenticated user"
 
-    let!(:own_bench) { create(:bench, user: user) }
+    let!(:own_bench) { create(:bench, discoverer: user) }
     let!(:other_bench) { create(:bench) }
 
-    it "updates own bench" do
+    it "updates own (discovered) bench" do
       patch "/api/v1/benches/#{own_bench.id}", params: { title: "Updated Title" }, headers: auth_headers, as: :json
       expect(response).to have_http_status(:ok)
       expect(json_body["title"]).to eq("Updated Title")
@@ -131,10 +142,10 @@ RSpec.describe "Benches", type: :request do
   describe "DELETE /api/v1/benches/:id" do
     include_context "authenticated user"
 
-    let!(:own_bench) { create(:bench, user: user) }
+    let!(:own_bench) { create(:bench, discoverer: user) }
     let!(:other_bench) { create(:bench) }
 
-    it "deletes own bench" do
+    it "deletes own (discovered) bench" do
       expect { delete "/api/v1/benches/#{own_bench.id}", headers: auth_headers, as: :json }
         .to change(Bench, :count).by(-1)
       expect(response).to have_http_status(:ok)

@@ -101,28 +101,59 @@ bench_descriptions = [
 
 benches = []
 
+visit_notes = [
+  "First time here — what a find.",
+  "Came back again, still my favourite spot.",
+  "Caught the sunset from here, unreal.",
+  "Quieter than last time, lovely and peaceful.",
+  "Brought friends along, they get it now.",
+  nil,
+  "Rainy day visit but worth it.",
+  "Morning coffee with this view. Perfect.",
+]
+
+# Attach 1-3 photos to a visit; returns true if at least one attached.
+attach_photos = lambda do |visit, bench_index, visit_index|
+  count = rand(1..3)
+  count.times do |p|
+    url = "https://picsum.photos/seed/bench#{bench_index + 1}_#{visit_index + 1}_#{p + 1}/800/600"
+    begin
+      visit.photos.attach(
+        io: URI.open(url),
+        filename: "bench_#{bench_index + 1}_visit_#{visit_index + 1}_photo_#{p + 1}.jpg",
+        content_type: "image/jpeg"
+      )
+    rescue => e
+      puts "  Warning: could not attach photo for bench #{bench_index + 1}: #{e.message}"
+    end
+  end
+  visit.photos.attached?
+end
+
 locations.each_with_index do |loc, i|
   bench = Bench.find_or_initialize_by(title: bench_titles[i])
 
   if bench.new_record?
+    # The discoverer is the first user to visit; other users contribute their own visits.
+    visitors = users.sample(rand(3..8))
+    discoverer = visitors.first
+
     bench.description = bench_descriptions[i]
     bench.latitude = loc[:lat]
     bench.longitude = loc[:lng]
     bench.location_name = loc[:name]
-    bench.user = users.sample
+    bench.discoverer = discoverer
 
-    photo_count = rand(2..5)
-    photo_count.times do |p|
-      url = "https://picsum.photos/seed/bench#{i + 1}_#{p + 1}/800/600"
-      begin
-        bench.photos.attach(
-          io: URI.open(url),
-          filename: "bench_#{i + 1}_photo_#{p + 1}.jpg",
-          content_type: "image/jpeg"
-        )
-      rescue => e
-        puts "  Warning: could not attach photo #{p + 1} for bench #{i + 1}: #{e.message}"
-      end
+    visitors.each_with_index do |visitor, vi|
+      visit = bench.visits.build(
+        user: visitor,
+        note: visit_notes.sample,
+        view_score: rand(1..5),
+        comfort_score: rand(1..5),
+        location_score: rand(1..5),
+        overall_score: rand(2..5)
+      )
+      attach_photos.call(visit, i, vi)
     end
 
     bench.save!
@@ -131,7 +162,7 @@ locations.each_with_index do |loc, i|
   benches << bench
 end
 
-puts "Creating ratings..."
+puts "Creating comments..."
 
 comment_pool = [
   "Stunning view of the valley — worth every step of the climb.",
@@ -171,27 +202,6 @@ comment_pool = [
   "One of those benches you tell people about. They should thank whoever put it here.",
 ]
 
-ratings_created = 0
-
-benches.each do |bench|
-  next if bench.ratings.any?
-
-  rating_users = users.sample(rand(3..8))
-  rating_users.each do |u|
-    Rating.create!(
-      user: u,
-      bench: bench,
-      view_score: rand(1..5),
-      comfort_score: rand(1..5),
-      location_score: rand(1..5),
-      overall_score: rand(2..5)
-    )
-    ratings_created += 1
-  end
-end
-
-puts "Creating comments..."
-
 comments_created = 0
 
 benches.each do |bench|
@@ -213,6 +223,6 @@ puts "=" * 40
 puts "Seed complete!"
 puts "  Users:    #{User.count}"
 puts "  Benches:  #{Bench.count}"
-puts "  Ratings:  #{Rating.count}"
+puts "  Visits:   #{Visit.count}"
 puts "  Comments: #{Comment.count}"
 puts "=" * 40

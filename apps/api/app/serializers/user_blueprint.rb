@@ -13,8 +13,11 @@ class UserBlueprint < Blueprinter::Base
   view :normal do
     include_view :brief
     fields :email, :bio, :created_at, :updated_at
-    field :benches_count do |user|
-      user.benches.count
+    field :discovered_count do |user|
+      user.discovered_benches.count
+    end
+    field :visits_count do |user|
+      user.visits.count
     end
     field :followers_count do |user|
       user.followers.count

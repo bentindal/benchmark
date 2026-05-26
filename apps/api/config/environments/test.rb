@@ -11,6 +11,9 @@ Rails.application.configure do
   config.action_dispatch.show_exceptions = :rescuable
   config.action_controller.allow_forgery_protection = false
   config.active_storage.service = :test
+  # Run jobs (e.g. Active Storage AnalyzeJob) inline on the test connection so they
+  # stay inside the per-example transaction and don't leak committed rows.
+  config.active_job.queue_adapter = :test
   config.action_mailer.perform_caching = false
   config.action_mailer.delivery_method = :test
   config.active_support.deprecation = :stderr

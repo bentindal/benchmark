@@ -19,7 +19,8 @@ const mockBench: BenchItem = {
   longitude: -73.968285,
   location_name: 'Central Park',
   created_at: '2024-01-01T00:00:00Z',
-  photos_urls: [],
+  cover_photo_url: null,
+  gallery_urls: [],
   average_rating: {
     view: 4.5,
     comfort: 3.8,
@@ -27,8 +28,9 @@ const mockBench: BenchItem = {
     overall: 4.2,
   },
   ratings_count: 5,
+  visits_count: 3,
   comments_count: 2,
-  user: { id: 1, username: 'testuser', avatar_url: null },
+  discoverer: { id: 1, username: 'testuser', avatar_url: null },
   distance_km: 0.5,
 };
 
@@ -59,7 +61,7 @@ describe('BenchCard', () => {
   });
 
   it('renders placeholder when no photo', () => {
-    render(<BenchCard bench={{ ...mockBench, photos_urls: [] }} />);
+    render(<BenchCard bench={{ ...mockBench, cover_photo_url: null }} />);
     expect(screen.getByText('🪑')).toBeTruthy();
   });
 

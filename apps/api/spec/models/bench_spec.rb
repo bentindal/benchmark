@@ -10,15 +10,15 @@ RSpec.describe Bench, type: :model do
       expect(result.keys).to match_array([:view, :comfort, :location, :overall])
     end
 
-    it "returns nil values when there are no ratings" do
+    it "returns nil values when there are no rated visits" do
       result = bench.average_rating
       expect(result[:view]).to be_nil
       expect(result[:overall]).to be_nil
     end
 
-    it "computes correct averages" do
-      create(:rating, bench: bench, view_score: 2, comfort_score: 4, location_score: 3, overall_score: 5)
-      create(:rating, bench: bench, view_score: 4, comfort_score: 2, location_score: 1, overall_score: 3)
+    it "computes correct averages across visits" do
+      create(:visit, bench: bench, view_score: 2, comfort_score: 4, location_score: 3, overall_score: 5)
+      create(:visit, bench: bench, view_score: 4, comfort_score: 2, location_score: 1, overall_score: 3)
 
       result = bench.average_rating
       expect(result[:view]).to eq(3.0)
@@ -28,12 +28,29 @@ RSpec.describe Bench, type: :model do
     end
 
     it "rounds to one decimal place" do
-      create(:rating, bench: bench, view_score: 1, overall_score: 1)
-      create(:rating, bench: bench, view_score: 2, overall_score: 2)
-      create(:rating, bench: bench, view_score: 2, overall_score: 2)
+      create(:visit, bench: bench, view_score: 1, overall_score: 1)
+      create(:visit, bench: bench, view_score: 2, overall_score: 2)
+      create(:visit, bench: bench, view_score: 2, overall_score: 2)
 
       result = bench.average_rating
       expect(result[:view]).to eq(1.7)
+    end
+
+    it "counts only each user's latest rated visit (one vote per user)" do
+      user = create(:user)
+      create(:visit, bench: bench, user: user, view_score: 1, overall_score: 1, created_at: 2.days.ago)
+      create(:visit, bench: bench, user: user, view_score: 5, overall_score: 5, created_at: 1.day.ago)
+
+      result = bench.average_rating
+      expect(result[:overall]).to eq(5.0)
+      expect(bench.ratings_count).to eq(1)
+    end
+
+    it "ignores unrated (photo-only) visits in the aggregate" do
+      create(:visit, bench: bench, view_score: 4, overall_score: 4)
+      create(:visit, :unrated, bench: bench)
+      expect(bench.ratings_count).to eq(1)
+      expect(bench.visits_count).to eq(2)
     end
   end
 

@@ -23,18 +23,14 @@ export default function UserProfileScreen() {
     );
   }
 
-  const { user, benches } = data;
+  const { user, discovered, visited } = data;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f6f1' }} edges={['bottom']}>
       <FlatList
-        data={benches}
-        keyExtractor={(item: BenchItem) => String(item.id)}
-        renderItem={({ item }: { item: BenchItem }) => (
-          <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-            <BenchCard bench={item} />
-          </View>
-        )}
+        data={[]}
+        keyExtractor={() => ''}
+        renderItem={null}
         contentContainerStyle={{ paddingBottom: 32 }}
         ListHeaderComponent={
           <>
@@ -91,10 +87,18 @@ export default function UserProfileScreen() {
               <View style={{ flexDirection: 'row', gap: 32, marginTop: 14 }}>
                 <View style={{ alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: '#1b4332' }}>
-                    {user.benches_count ?? benches.length}
+                    {user.discovered_count ?? discovered.length}
                   </Text>
                   <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
-                    Benches
+                    Discovered
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: '#1b4332' }}>
+                    {user.visits_count ?? visited.length}
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
+                    Visits
                   </Text>
                 </View>
                 {user.followers_count != null && (
@@ -107,40 +111,58 @@ export default function UserProfileScreen() {
                     </Text>
                   </View>
                 )}
-                {user.following_count != null && (
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: '#1b4332' }}>
-                      {user.following_count}
-                    </Text>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
-                      Following
-                    </Text>
-                  </View>
-                )}
               </View>
             </View>
 
-            {benches.length > 0 && (
-              <Text
-                style={{
-                  fontFamily: 'Inter_600SemiBold',
-                  fontSize: 15,
-                  color: '#1b4332',
-                  paddingHorizontal: 16,
-                  marginBottom: 12,
-                }}
-              >
-                Benches by {user.username}
+            {/* Discovered section */}
+            <Text
+              style={{
+                fontFamily: 'Inter_600SemiBold',
+                fontSize: 15,
+                color: '#1b4332',
+                paddingHorizontal: 16,
+                marginBottom: 12,
+              }}
+            >
+              Discovered by {user.username}{discovered.length > 0 ? ` (${discovered.length})` : ''}
+            </Text>
+            {discovered.length === 0 ? (
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652', paddingHorizontal: 16, marginBottom: 20 }}>
+                No benches discovered yet.
               </Text>
+            ) : (
+              discovered.map((item) => (
+                <View key={item.id} style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                  <BenchCard bench={item} />
+                </View>
+              ))
+            )}
+
+            {/* Visited section */}
+            <Text
+              style={{
+                fontFamily: 'Inter_600SemiBold',
+                fontSize: 15,
+                color: '#1b4332',
+                paddingHorizontal: 16,
+                marginBottom: 12,
+                marginTop: 8,
+              }}
+            >
+              Visited{visited.length > 0 ? ` (${visited.length})` : ''}
+            </Text>
+            {visited.length === 0 ? (
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652', paddingHorizontal: 16, marginBottom: 20 }}>
+                No visits yet.
+              </Text>
+            ) : (
+              visited.map((item) => (
+                <View key={item.id} style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                  <BenchCard bench={item} />
+                </View>
+              ))
             )}
           </>
-        }
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652' }}>
-              No benches posted yet
-            </Text>
-          </View>
         }
       />
     </SafeAreaView>

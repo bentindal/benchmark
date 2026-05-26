@@ -3,36 +3,48 @@ module Api
     class BenchesController < ApplicationController
       before_action :require_authentication!, only: [:create, :update, :destroy]
       before_action :set_bench, only: [:show, :update, :destroy]
-      before_action :authorize_owner!, only: [:update, :destroy]
+      before_action :authorize_discoverer!, only: [:update, :destroy]
 
       def index
         benches = params[:sort] == "top_rated" ? Bench.top_rated : Bench.recent
-        benches = paginate(benches).preload(:user, :ratings, :comments, photos_attachments: :blob)
+        benches = paginate(benches).preload(:discoverer, visits: { photos_attachments: :blob })
         render json: BenchBlueprint.render_as_hash(benches)
       end
 
       def show
         comments = paginate(@bench.comments.includes(:user).order(created_at: :asc))
-        render json: {
+        visits = @bench.visits.includes(:user, photos_attachments: :blob).order(created_at: :desc).to_a
+        response = {
           bench: BenchBlueprint.render_as_hash(@bench),
-          ratings: RatingBlueprint.render_as_hash(@bench.ratings.includes(:user)),
+          visits: VisitBlueprint.render_as_hash(visits),
           comments: CommentBlueprint.render_as_hash(comments)
         }
+        if current_user
+          own = visits.select { |v| v.user_id == current_user.id }
+          response[:current_user_visits] = VisitBlueprint.render_as_hash(own)
+        end
+        render json: response
       end
 
+      # Creating a bench also records the discoverer's first visit (photos + optional
+      # rating + note) from the same multipart payload — a bench is never photo-less.
       def create
-        bench = current_user.benches.build(bench_params)
-        bench.photos.attach(params[:photos]) if params[:photos]
-        if bench.save
-          render json: BenchBlueprint.render_as_hash(bench), status: :created
-        else
-          render json: { errors: bench.errors.full_messages }, status: :unprocessable_entity
+        bench = current_user.discovered_benches.build(bench_params)
+        visit = bench.visits.build(visit_params.merge(user: current_user))
+        visit.photos.attach(params[:photos]) if params[:photos]
+
+        Bench.transaction do
+          bench.save!
+          visit.save!
         end
+        render json: BenchBlueprint.render_as_hash(bench), status: :created
+      rescue ActiveRecord::RecordInvalid
+        errors = (bench.errors.full_messages + visit.errors.full_messages).uniq
+        render json: { errors: errors }, status: :unprocessable_entity
       end
 
       def update
         if @bench.update(bench_params)
-          @bench.photos.attach(params[:photos]) if params[:photos]
           render json: BenchBlueprint.render_as_hash(@bench)
         else
           render json: { errors: @bench.errors.full_messages }, status: :unprocessable_entity
@@ -65,12 +77,16 @@ module Api
         render json: { error: "Bench not found" }, status: :not_found
       end
 
-      def authorize_owner!
-        render json: { error: "Forbidden" }, status: :forbidden unless @bench.user_id == current_user.id
+      def authorize_discoverer!
+        render json: { error: "Forbidden" }, status: :forbidden unless @bench.discovered_by_id == current_user.id
       end
 
       def bench_params
         params.permit(:title, :description, :latitude, :longitude, :location_name)
+      end
+
+      def visit_params
+        params.permit(:note, :view_score, :comfort_score, :location_score, :overall_score)
       end
     end
   end

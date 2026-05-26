@@ -16,43 +16,104 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { benchApi } from '../../lib/api';
+import { benchApi, visitApi, type BenchItem } from '../../lib/api';
+import { resolvePhotoUrl } from '../../lib/images';
 
-type Step = 1 | 2 | 3;
+// 'new' flow:  photos → location → [dedup] → details
+// 'visit' flow: photos → rate  (started from bench detail or dedup selection)
+type Step = 'photos' | 'location' | 'dedup' | 'details' | 'rate';
+
+function StarInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#1b4332', marginBottom: 6 }}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <TouchableOpacity key={n} onPress={() => onChange(n)} hitSlop={6}>
+            <Ionicons
+              name={value !== null && n <= value ? 'star' : 'star-outline'}
+              size={30}
+              color="#2d6a4f"
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 export default function PostScreen() {
-  const params = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  const params = useLocalSearchParams<{ benchId?: string }>();
+  const initialBenchId = params.benchId ? parseInt(params.benchId, 10) : null;
 
-  const [step, setStep] = useState<Step>(1);
+  const [mode, setMode] = useState<'new' | 'visit'>(initialBenchId ? 'visit' : 'new');
+  const [step, setStep] = useState<Step>(initialBenchId ? 'photos' : 'photos');
+  const [targetBenchId, setTargetBenchId] = useState<number | null>(initialBenchId);
+  const [nearbyBenches, setNearbyBenches] = useState<BenchItem[]>([]);
+
+  // Shared across both flows
   const [photos, setPhotos] = useState<string[]>([]);
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    params.lat && params.lng
-      ? { lat: parseFloat(params.lat), lng: parseFloat(params.lng) }
-      : null,
-  );
+  const [note, setNote] = useState('');
+  const [overallScore, setOverallScore] = useState<number | null>(null);
+  const [viewScore, setViewScore] = useState<number | null>(null);
+  const [comfortScore, setComfortScore] = useState<number | null>(null);
+  const [locationScore, setLocationScore] = useState<number | null>(null);
+
+  // New bench only
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState('');
   const [locating, setLocating] = useState(false);
+  const [checkingNearby, setCheckingNearby] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
   const qc = useQueryClient();
 
-  const { mutate, isPending } = useMutation({
+  const buildVisitFields = (fd: FormData) => {
+    photos.forEach((uri, i) => {
+      fd.append('photos[]', { uri, type: 'image/jpeg', name: `photo_${i}.jpg` } as any);
+    });
+    if (note.trim()) fd.append('note', note.trim());
+    if (overallScore) fd.append('overall_score', String(overallScore));
+    if (viewScore) fd.append('view_score', String(viewScore));
+    if (comfortScore) fd.append('comfort_score', String(comfortScore));
+    if (locationScore) fd.append('location_score', String(locationScore));
+  };
+
+  const visitMutation = useMutation({
     mutationFn: () => {
-      const formData = new FormData();
-      formData.append('bench[title]', title);
-      if (description) formData.append('bench[description]', description);
-      formData.append('bench[latitude]', String(coords!.lat));
-      formData.append('bench[longitude]', String(coords!.lng));
-      if (locationName) formData.append('bench[location_name]', locationName);
-      photos.forEach((uri, i) => {
-        formData.append('bench[photos][]', {
-          uri,
-          type: 'image/jpeg',
-          name: `photo_${i}.jpg`,
-        } as any);
-      });
-      return benchApi.create(formData);
+      const fd = new FormData();
+      buildVisitFields(fd);
+      return visitApi.create(targetBenchId!, fd);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bench', targetBenchId] });
+      qc.invalidateQueries({ queryKey: ['benches'] });
+      router.push(`/bench/${targetBenchId}`);
+    },
+    onError: () => Alert.alert('Error', 'Failed to check in. Please try again.'),
+  });
+
+  const benchMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData();
+      buildVisitFields(fd);
+      fd.append('bench[title]', title);
+      if (description.trim()) fd.append('bench[description]', description.trim());
+      fd.append('bench[latitude]', String(coords!.lat));
+      fd.append('bench[longitude]', String(coords!.lng));
+      if (locationName.trim()) fd.append('bench[location_name]', locationName.trim());
+      return benchApi.create(fd);
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['benches'] });
@@ -60,6 +121,8 @@ export default function PostScreen() {
     },
     onError: () => Alert.alert('Error', 'Failed to create bench. Please try again.'),
   });
+
+  const isPending = visitMutation.isPending || benchMutation.isPending;
 
   const pickPhotos = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -95,7 +158,144 @@ export default function PostScreen() {
     }
   };
 
-  const stepTitles = ['Photos', 'Location', 'Details'];
+  const proceedFromLocation = async () => {
+    if (!coords) return;
+    setCheckingNearby(true);
+    try {
+      const res = await benchApi.nearby({ lat: coords.lat, lng: coords.lng, radius: 0.05 });
+      if (res.data.length > 0) {
+        setNearbyBenches(res.data);
+        setStep('dedup');
+      } else {
+        setStep('details');
+      }
+    } catch {
+      setStep('details');
+    } finally {
+      setCheckingNearby(false);
+    }
+  };
+
+  const selectExistingBench = (bench: BenchItem) => {
+    setTargetBenchId(bench.id);
+    setMode('visit');
+    setStep('rate');
+  };
+
+  // ---- Render helpers ----
+
+  const renderPhotos = (nextStep: Step) => (
+    <View>
+      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332', marginBottom: 8 }}>
+        Add photos (up to 5)
+      </Text>
+      {photos.length > 0 && (
+        <FlatList
+          data={photos}
+          keyExtractor={(uri, i) => `${uri}-${i}`}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, marginBottom: 12 }}
+          renderItem={({ item, index }) => (
+            <View>
+              <Image source={{ uri: item }} style={{ width: 100, height: 100, borderRadius: 10 }} resizeMode="cover" />
+              <TouchableOpacity
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: 99,
+                  padding: 3,
+                }}
+                onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
+              >
+                <Ionicons name="close" size={12} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          )}
+        />
+      )}
+      {photos.length < 5 && (
+        <TouchableOpacity
+          style={{
+            borderWidth: 1.5,
+            borderColor: '#e8e4dc',
+            borderStyle: 'dashed',
+            borderRadius: 12,
+            paddingVertical: 24,
+            alignItems: 'center',
+            gap: 8,
+          }}
+          onPress={pickPhotos}
+        >
+          <Ionicons name="camera-outline" size={28} color="#2d6a4f" />
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#2d6a4f' }}>
+            {photos.length === 0 ? 'Select photos' : 'Add more'}
+          </Text>
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity
+        style={{
+          backgroundColor: '#2d6a4f',
+          borderRadius: 12,
+          paddingVertical: 14,
+          alignItems: 'center',
+          marginTop: 20,
+        }}
+        onPress={() => setStep(nextStep)}
+        disabled={photos.length === 0}
+      >
+        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#f8f6f1' }}>
+          {nextStep === 'location' ? 'Next: Location' : 'Next: Rate'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderRatingFields = () => (
+    <View>
+      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332', marginBottom: 16 }}>
+        Rate this bench (optional)
+      </Text>
+      <StarInput label="Overall" value={overallScore} onChange={setOverallScore} />
+      <StarInput label="View" value={viewScore} onChange={setViewScore} />
+      <StarInput label="Comfort" value={comfortScore} onChange={setComfortScore} />
+      <StarInput label="Location" value={locationScore} onChange={setLocationScore} />
+      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#1b4332', marginBottom: 6, marginTop: 4 }}>
+        Note (optional)
+      </Text>
+      <TextInput
+        style={{
+          backgroundColor: '#fff',
+          borderWidth: 1,
+          borderColor: '#e8e4dc',
+          borderRadius: 12,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          fontFamily: 'Inter_400Regular',
+          fontSize: 14,
+          color: '#1b4332',
+          height: 88,
+          textAlignVertical: 'top',
+          marginBottom: 20,
+        }}
+        placeholder="Anything special about this visit?"
+        placeholderTextColor="#7a6652"
+        value={note}
+        onChangeText={setNote}
+        multiline
+      />
+    </View>
+  );
+
+  const isVisitMode = mode === 'visit';
+
+  // Step labels & count differ by mode
+  const stepLabels = isVisitMode ? ['Photos', 'Rate'] : ['Photos', 'Location', 'Details'];
+  const currentStepIndex = isVisitMode
+    ? (['photos', 'rate'] as Step[]).indexOf(step)
+    : (['photos', 'location', 'details'] as Step[]).indexOf(step);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f6f1' }} edges={['top']}>
@@ -103,129 +303,58 @@ export default function PostScreen() {
         {/* Header */}
         <View style={{ paddingTop: 20, paddingBottom: 8 }}>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 26, color: '#1b4332' }}>
-            Add a Bench
+            {isVisitMode ? 'Check In' : 'Add a Bench'}
           </Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652', marginTop: 2 }}>
-            Share a bench with the community
+            {isVisitMode ? 'Log your visit with photos and a rating' : 'Share a bench with the community'}
           </Text>
         </View>
 
-        {/* Step indicator */}
-        <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
-          {([1, 2, 3] as Step[]).map((s) => (
-            <View key={s} style={{ flex: 1, alignItems: 'center' }}>
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: step >= s ? '#2d6a4f' : '#e8e4dc',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 4,
-                }}
-              >
-                <Text
+        {/* Step indicator (not shown on dedup screen) */}
+        {step !== 'dedup' && (
+          <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
+            {stepLabels.map((label, i) => (
+              <View key={label} style={{ flex: 1, alignItems: 'center' }}>
+                <View
                   style={{
-                    fontFamily: 'Inter_600SemiBold',
-                    fontSize: 13,
-                    color: step >= s ? '#f8f6f1' : '#7a6652',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: currentStepIndex >= i ? '#2d6a4f' : '#e8e4dc',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 4,
                   }}
                 >
-                  {s}
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 13,
+                      color: currentStepIndex >= i ? '#f8f6f1' : '#7a6652',
+                    }}
+                  >
+                    {i + 1}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontFamily: currentStepIndex === i ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                    fontSize: 11,
+                    color: currentStepIndex === i ? '#2d6a4f' : '#7a6652',
+                  }}
+                >
+                  {label}
                 </Text>
               </View>
-              <Text
-                style={{
-                  fontFamily: step === s ? 'Inter_600SemiBold' : 'Inter_400Regular',
-                  fontSize: 11,
-                  color: step === s ? '#2d6a4f' : '#7a6652',
-                }}
-              >
-                {stepTitles[s - 1]}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Step 1: Photos */}
-        {step === 1 && (
-          <View>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332', marginBottom: 8 }}>
-              Add photos (up to 5)
-            </Text>
-
-            {photos.length > 0 && (
-              <FlatList
-                data={photos}
-                keyExtractor={(uri, i) => `${uri}-${i}`}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 8, marginBottom: 12 }}
-                renderItem={({ item, index }) => (
-                  <View>
-                    <Image
-                      source={{ uri: item }}
-                      style={{ width: 100, height: 100, borderRadius: 10 }}
-                      resizeMode="cover"
-                    />
-                    <TouchableOpacity
-                      style={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
-                        borderRadius: 99,
-                        padding: 3,
-                      }}
-                      onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
-                    >
-                      <Ionicons name="close" size={12} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              />
-            )}
-
-            {photos.length < 5 && (
-              <TouchableOpacity
-                style={{
-                  borderWidth: 1.5,
-                  borderColor: '#e8e4dc',
-                  borderStyle: 'dashed',
-                  borderRadius: 12,
-                  paddingVertical: 24,
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-                onPress={pickPhotos}
-              >
-                <Ionicons name="camera-outline" size={28} color="#2d6a4f" />
-                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#2d6a4f' }}>
-                  {photos.length === 0 ? 'Select photos' : 'Add more'}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#2d6a4f',
-                borderRadius: 12,
-                paddingVertical: 14,
-                alignItems: 'center',
-                marginTop: 20,
-              }}
-              onPress={() => setStep(2)}
-            >
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#f8f6f1' }}>
-                Next: Location
-              </Text>
-            </TouchableOpacity>
+            ))}
           </View>
         )}
 
-        {/* Step 2: Location */}
-        {step === 2 && (
+        {/* ── Step: Photos ── */}
+        {step === 'photos' && renderPhotos(isVisitMode ? 'rate' : 'location')}
+
+        {/* ── Step: Location (new bench only) ── */}
+        {step === 'location' && (
           <View>
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332', marginBottom: 8 }}>
               Where is this bench?
@@ -292,7 +421,7 @@ export default function PostScreen() {
                   paddingVertical: 14,
                   alignItems: 'center',
                 }}
-                onPress={() => setStep(1)}
+                onPress={() => setStep('photos')}
               >
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#7a6652' }}>Back</Text>
               </TouchableOpacity>
@@ -304,30 +433,129 @@ export default function PostScreen() {
                   paddingVertical: 14,
                   alignItems: 'center',
                 }}
-                onPress={() => setStep(3)}
-                disabled={!coords}
+                onPress={proceedFromLocation}
+                disabled={!coords || checkingNearby}
               >
-                <Text
-                  style={{
-                    fontFamily: 'Inter_600SemiBold',
-                    fontSize: 15,
-                    color: coords ? '#f8f6f1' : '#7a6652',
-                  }}
-                >
-                  Next: Details
-                </Text>
+                {checkingNearby ? (
+                  <ActivityIndicator color="#f8f6f1" size="small" />
+                ) : (
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 15,
+                      color: coords ? '#f8f6f1' : '#7a6652',
+                    }}
+                  >
+                    Next: Details
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Step 3: Details */}
-        {step === 3 && (
-          <View>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332', marginBottom: 8 }}>
-              Tell us about the bench
+        {/* ── Step: Dedup (is this an existing bench?) ── */}
+        {step === 'dedup' && (
+          <View style={{ paddingTop: 8 }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: '#1b4332', marginBottom: 6 }}>
+              Is this one of these benches?
+            </Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652', marginBottom: 16 }}>
+              We found benches nearby. Check in on an existing one instead of adding a duplicate.
             </Text>
 
+            {nearbyBenches.map((bench) => {
+              const photo = resolvePhotoUrl(bench.cover_photo_url);
+              return (
+                <TouchableOpacity
+                  key={bench.id}
+                  style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: '#e8e4dc',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    overflow: 'hidden',
+                    marginBottom: 10,
+                  }}
+                  onPress={() => selectExistingBench(bench)}
+                  activeOpacity={0.8}
+                >
+                  {photo ? (
+                    <Image source={{ uri: photo }} style={{ width: 72, height: 72 }} resizeMode="cover" />
+                  ) : (
+                    <View
+                      style={{
+                        width: 72,
+                        height: 72,
+                        backgroundColor: '#e8e4dc',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 28 }}>🪑</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1, padding: 12 }}>
+                    <Text
+                      style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332' }}
+                      numberOfLines={1}
+                    >
+                      {bench.title}
+                    </Text>
+                    {bench.location_name ? (
+                      <Text
+                        style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652', marginTop: 2 }}
+                        numberOfLines={1}
+                      >
+                        📍 {bench.location_name}
+                      </Text>
+                    ) : null}
+                    {bench.distance_km != null && (
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#2d6a4f', marginTop: 2 }}>
+                        {bench.distance_km < 1
+                          ? `${Math.round(bench.distance_km * 1000)} m away`
+                          : `${bench.distance_km.toFixed(1)} km away`}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ paddingRight: 14 }}>
+                    <Ionicons name="chevron-forward" size={18} color="#7a6652" />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            <TouchableOpacity
+              style={{
+                borderWidth: 1.5,
+                borderColor: '#2d6a4f',
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: 'center',
+                marginTop: 4,
+                marginBottom: 8,
+              }}
+              onPress={() => setStep('details')}
+            >
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#2d6a4f' }}>
+                None of these — it's a new bench
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ alignItems: 'center', paddingVertical: 8 }}
+              onPress={() => setStep('location')}
+            >
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652' }}>Back</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Step: Details (new bench: title + description + rating + note) ── */}
+        {step === 'details' && (
+          <View>
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#1b4332', marginBottom: 6 }}>
               Title *
             </Text>
@@ -364,7 +592,7 @@ export default function PostScreen() {
                 fontFamily: 'Inter_400Regular',
                 fontSize: 14,
                 color: '#1b4332',
-                height: 96,
+                height: 80,
                 textAlignVertical: 'top',
                 marginBottom: 20,
               }}
@@ -374,6 +602,8 @@ export default function PostScreen() {
               onChangeText={setDescription}
               multiline
             />
+
+            {renderRatingFields()}
 
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
@@ -385,7 +615,7 @@ export default function PostScreen() {
                   paddingVertical: 14,
                   alignItems: 'center',
                 }}
-                onPress={() => setStep(2)}
+                onPress={() => setStep(nearbyBenches.length > 0 ? 'dedup' : 'location')}
               >
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#7a6652' }}>Back</Text>
               </TouchableOpacity>
@@ -397,7 +627,7 @@ export default function PostScreen() {
                   paddingVertical: 14,
                   alignItems: 'center',
                 }}
-                onPress={() => mutate()}
+                onPress={() => benchMutation.mutate()}
                 disabled={!title.trim() || isPending}
               >
                 {isPending ? (
@@ -411,6 +641,48 @@ export default function PostScreen() {
                     }}
                   >
                     Post Bench
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* ── Step: Rate (visit mode: rating + note + submit) ── */}
+        {step === 'rate' && (
+          <View>
+            {renderRatingFields()}
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: '#e8e4dc',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                }}
+                onPress={() => setStep('photos')}
+              >
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#7a6652' }}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 2,
+                  backgroundColor: '#2d6a4f',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                }}
+                onPress={() => visitMutation.mutate()}
+                disabled={isPending}
+              >
+                {isPending ? (
+                  <ActivityIndicator color="#f8f6f1" />
+                ) : (
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#f8f6f1' }}>
+                    Check In
                   </Text>
                 )}
               </TouchableOpacity>

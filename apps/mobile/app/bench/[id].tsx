@@ -16,15 +16,12 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MapView, { Marker } from 'react-native-maps';
-import { benchApi, ratingApi, commentApi, type CommentItem } from '../../lib/api';
+import { benchApi, commentApi, type CommentItem, type VisitItem } from '../../lib/api';
 import { resolvePhotoUrl, resolvePhotoUrls } from '../../lib/images';
 import { useAuthStore } from '../../lib/auth';
 import RatingStars from '../../components/RatingStars';
 
 const { width } = Dimensions.get('window');
-
-const DIMS = ['view', 'comfort', 'location', 'overall'] as const;
-type Dim = (typeof DIMS)[number];
 
 function ScoreChip({ label, value }: { label: string; value: number | null | undefined }) {
   if (!value) return null;
@@ -48,6 +45,77 @@ function ScoreChip({ label, value }: { label: string; value: number | null | und
   );
 }
 
+function VisitCard({ visit }: { visit: VisitItem }) {
+  const photos = resolvePhotoUrls(visit.photos_urls);
+  return (
+    <View
+      style={{
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#e8e4dc',
+        marginBottom: 8,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        {visit.user?.avatar_url ? (
+          <Image
+            source={{ uri: resolvePhotoUrl(visit.user.avatar_url) }}
+            style={{ width: 22, height: 22, borderRadius: 11 }}
+          />
+        ) : (
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              backgroundColor: '#e8e4dc',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 11 }}>👤</Text>
+          </View>
+        )}
+        <TouchableOpacity onPress={() => visit.user && router.push(`/user/${visit.user.id}`)}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#2d6a4f' }}>
+            {visit.user?.username ?? 'Someone'}
+          </Text>
+        </TouchableOpacity>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
+          ·{' '}
+          {new Date(visit.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </Text>
+        {visit.overall_score ? (
+          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <RatingStars rating={visit.overall_score} size={12} />
+          </View>
+        ) : null}
+      </View>
+
+      {photos.length > 0 && (
+        <FlatList
+          data={photos}
+          keyExtractor={(uri, i) => `${uri}-${i}`}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 6, marginBottom: visit.note ? 8 : 0 }}
+          renderItem={({ item }) => (
+            <Image source={{ uri: item }} style={{ width: 90, height: 90, borderRadius: 8 }} />
+          )}
+        />
+      )}
+
+      {visit.note ? (
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#1b4332', lineHeight: 20 }}>
+          {visit.note}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export default function BenchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const benchId = parseInt(id, 10);
@@ -55,59 +123,10 @@ export default function BenchDetailScreen() {
   const { user } = useAuthStore();
 
   const [commentText, setCommentText] = useState('');
-  const [myRating, setMyRating] = useState<Record<Dim, number>>({
-    view: 0,
-    comfort: 0,
-    location: 0,
-    overall: 0,
-  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['bench', benchId],
     queryFn: () => benchApi.get(benchId).then((r) => r.data),
-  });
-
-  const { data: ratingsData } = useQuery({
-    queryKey: ['bench', benchId, 'ratings'],
-    queryFn: () =>
-      ratingApi.list(benchId).then((r) => {
-        if (r.data.current_user_rating) {
-          const cur = r.data.current_user_rating;
-          setMyRating({
-            view: cur.view_score,
-            comfort: cur.comfort_score,
-            location: cur.location_score,
-            overall: cur.overall_score,
-          });
-        }
-        return r.data;
-      }),
-    enabled: !!user,
-  });
-
-  const submitRating = useMutation({
-    mutationFn: () => {
-      const existing = ratingsData?.current_user_rating;
-      if (existing) {
-        return ratingApi.update(benchId, existing.id, {
-          view_score: myRating.view,
-          comfort_score: myRating.comfort,
-          location_score: myRating.location,
-          overall_score: myRating.overall,
-        });
-      }
-      return ratingApi.create(benchId, {
-        view_score: myRating.view,
-        comfort_score: myRating.comfort,
-        location_score: myRating.location,
-        overall_score: myRating.overall,
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bench', benchId] });
-      qc.invalidateQueries({ queryKey: ['bench', benchId, 'ratings'] });
-    },
-    onError: () => Alert.alert('Error', 'Could not submit rating.'),
   });
 
   const submitComment = useMutation({
@@ -127,7 +146,8 @@ export default function BenchDetailScreen() {
     );
   }
 
-  const { bench, comments } = data;
+  const { bench, visits, comments } = data;
+  const gallery = resolvePhotoUrls(bench.gallery_urls);
 
   return (
     <KeyboardAvoidingView
@@ -135,21 +155,17 @@ export default function BenchDetailScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Photo carousel */}
-        {bench.photos_urls.length > 0 ? (
+        {/* Photo gallery (aggregated across all visits) */}
+        {gallery.length > 0 ? (
           <FlatList
-            data={resolvePhotoUrls(bench.photos_urls)}
+            data={gallery}
             keyExtractor={(uri, i) => `${uri}-${i}`}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            scrollEnabled={bench.photos_urls.length > 1}
+            scrollEnabled={gallery.length > 1}
             renderItem={({ item }) => (
-              <Image
-                source={{ uri: item }}
-                style={{ width, height: width * 0.75 }}
-                resizeMode="cover"
-              />
+              <Image source={{ uri: item }} style={{ width, height: width * 0.75 }} resizeMode="cover" />
             )}
           />
         ) : (
@@ -194,14 +210,14 @@ export default function BenchDetailScreen() {
             </Text>
           )}
 
-          {/* Owner row */}
+          {/* Discoverer + visit count */}
           <TouchableOpacity
             style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}
-            onPress={() => router.push(`/user/${bench.user.id}`)}
+            onPress={() => router.push(`/user/${bench.discoverer.id}`)}
           >
-            {bench.user.avatar_url ? (
+            {bench.discoverer.avatar_url ? (
               <Image
-                source={{ uri: resolvePhotoUrl(bench.user.avatar_url) }}
+                source={{ uri: resolvePhotoUrl(bench.discoverer.avatar_url) }}
                 style={{ width: 24, height: 24, borderRadius: 12 }}
               />
             ) : (
@@ -219,20 +235,15 @@ export default function BenchDetailScreen() {
               </View>
             )}
             <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#7a6652' }}>
-              {bench.user.username}
+              Discovered by {bench.discoverer.username}
             </Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#7a6652' }}>
-              ·{' '}
-              {new Date(bench.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
+              · {bench.visits_count} {bench.visits_count === 1 ? 'visit' : 'visits'}
             </Text>
           </TouchableOpacity>
 
-          {/* Score breakdown */}
-          {bench.average_rating && (
+          {/* Aggregate score breakdown */}
+          {bench.average_rating && bench.ratings_count > 0 && (
             <View
               style={{
                 backgroundColor: '#fff',
@@ -247,7 +258,7 @@ export default function BenchDetailScreen() {
                 style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332', marginBottom: 10 }}
               >
                 Ratings · {bench.ratings_count}{' '}
-                {bench.ratings_count === 1 ? 'review' : 'reviews'}
+                {bench.ratings_count === 1 ? 'rater' : 'raters'}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 <ScoreChip label="Overall" value={bench.average_rating.overall} />
@@ -258,72 +269,22 @@ export default function BenchDetailScreen() {
             </View>
           )}
 
-          {/* Interactive rating section */}
+          {/* Add-your-visit CTA — check-ins (photos + rating) happen in the post flow */}
           {user && (
-            <View
+            <TouchableOpacity
               style={{
-                backgroundColor: '#fff',
-                borderRadius: 14,
-                padding: 14,
-                borderWidth: 1,
-                borderColor: '#e8e4dc',
-                marginBottom: 16,
+                backgroundColor: '#2d6a4f',
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: 'center',
+                marginBottom: 20,
               }}
+              onPress={() => router.push(`/post?benchId=${bench.id}`)}
             >
-              <Text
-                style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#1b4332', marginBottom: 12 }}
-              >
-                {ratingsData?.current_user_rating ? 'Your Rating' : 'Rate this bench'}
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#f8f6f1' }}>
+                + Add your visit
               </Text>
-              {DIMS.map((dim) => (
-                <View
-                  key={dim}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 10,
-                  }}
-                >
-                  <Text
-                    style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#7a6652', width: 70 }}
-                  >
-                    {dim[0].toUpperCase() + dim.slice(1)}
-                  </Text>
-                  <RatingStars
-                    rating={myRating[dim]}
-                    size={26}
-                    interactive
-                    onChange={(v) => setMyRating((prev) => ({ ...prev, [dim]: v }))}
-                  />
-                </View>
-              ))}
-              <TouchableOpacity
-                style={{
-                  backgroundColor: myRating.overall > 0 ? '#2d6a4f' : '#e8e4dc',
-                  borderRadius: 10,
-                  paddingVertical: 10,
-                  alignItems: 'center',
-                  marginTop: 6,
-                }}
-                onPress={() => submitRating.mutate()}
-                disabled={myRating.overall === 0 || submitRating.isPending}
-              >
-                {submitRating.isPending ? (
-                  <ActivityIndicator color="#f8f6f1" size="small" />
-                ) : (
-                  <Text
-                    style={{
-                      fontFamily: 'Inter_600SemiBold',
-                      fontSize: 14,
-                      color: myRating.overall > 0 ? '#f8f6f1' : '#7a6652',
-                    }}
-                  >
-                    {ratingsData?.current_user_rating ? 'Update Rating' : 'Submit Rating'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           )}
 
           {/* Mini-map */}
@@ -357,9 +318,24 @@ export default function BenchDetailScreen() {
             </MapView>
           </View>
 
-          {/* Comments */}
+          {/* Visit timeline */}
           <Text
             style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#1b4332', marginBottom: 12 }}
+          >
+            Visits{visits.length > 0 ? ` (${visits.length})` : ''}
+          </Text>
+          {visits.map((visit) => (
+            <VisitCard key={visit.id} visit={visit} />
+          ))}
+          {visits.length === 0 && (
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#7a6652', marginBottom: 12 }}>
+              No visits yet.
+            </Text>
+          )}
+
+          {/* Comments */}
+          <Text
+            style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#1b4332', marginTop: 8, marginBottom: 12 }}
           >
             Comments{comments.length > 0 ? ` (${comments.length})` : ''}
           </Text>

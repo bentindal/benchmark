@@ -3,15 +3,14 @@ import { router } from 'expo-router';
 import type { BenchItem } from '../lib/api';
 import RatingStars from './RatingStars';
 
-import { resolvePhotoUrl, resolvePhotoUrls } from '../lib/images';
+import { resolvePhotoUrl } from '../lib/images';
 
 type Props = {
   bench: BenchItem;
 };
 
 export default function BenchCard({ bench }: Props) {
-  const photos = resolvePhotoUrls(bench.photos_urls);
-  const photo = photos[0];
+  const photo = resolvePhotoUrl(bench.cover_photo_url);
   const overall = bench.average_rating?.overall;
 
   return (
@@ -63,7 +62,8 @@ export default function BenchCard({ bench }: Props) {
           <RatingStars rating={overall ?? 0} size={13} />
           <Text className="font-inter text-bench-bark text-xs">
             {overall ? overall.toFixed(1) : '—'} · {bench.ratings_count}{' '}
-            {bench.ratings_count === 1 ? 'rating' : 'ratings'}
+            {bench.ratings_count === 1 ? 'rating' : 'ratings'} · {bench.visits_count}{' '}
+            {bench.visits_count === 1 ? 'visit' : 'visits'}
           </Text>
         </View>
 
@@ -94,9 +94,9 @@ export default function BenchCard({ bench }: Props) {
         )}
 
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 }}>
-          {bench.user.avatar_url ? (
+          {bench.discoverer.avatar_url ? (
             <Image
-              source={{ uri: resolvePhotoUrl(bench.user.avatar_url) }}
+              source={{ uri: resolvePhotoUrl(bench.discoverer.avatar_url) }}
               style={{ width: 18, height: 18, borderRadius: 9 }}
             />
           ) : (
@@ -114,7 +114,7 @@ export default function BenchCard({ bench }: Props) {
             </View>
           )}
           <Text className="font-inter text-bench-bark text-xs" numberOfLines={1}>
-            {bench.user.username}
+            {bench.discoverer.username}
           </Text>
           {bench.location_name ? (
             <>

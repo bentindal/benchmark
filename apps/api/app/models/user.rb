@@ -6,8 +6,9 @@ class User < ApplicationRecord
          :jwt_authenticatable, jwt_revocation_strategy: self
 
   has_one_attached :avatar
-  has_many :benches, dependent: :destroy
-  has_many :ratings, dependent: :destroy
+  has_many :discovered_benches, class_name: "Bench", foreign_key: :discovered_by_id, dependent: :destroy
+  has_many :visits, dependent: :destroy
+  has_many :benches, through: :visits
   has_many :comments, dependent: :destroy
   has_many :given_follows, class_name: "Follow", foreign_key: :follower_id, dependent: :destroy
   has_many :received_follows, class_name: "Follow", foreign_key: :followed_id, dependent: :destroy

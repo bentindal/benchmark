@@ -20,9 +20,11 @@ Rails.application.routes.draw do
         collection do
           get :nearby
         end
-        resources :ratings,  only: [:index, :create, :update]
+        resources :visits,   only: [:index, :create]
         resources :comments, only: [:index, :create, :destroy]
       end
+
+      resources :visits, only: [:show, :update, :destroy]
 
       resources :users, only: [:show, :update]
       get "feed", to: "feed#index"

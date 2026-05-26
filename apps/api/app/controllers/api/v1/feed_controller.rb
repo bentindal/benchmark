@@ -3,11 +3,13 @@ module Api
     class FeedController < ApplicationController
       before_action :require_authentication!
 
+      # The feed is visit activity ("X visited <bench>"), newest first.
       def index
-        benches = paginate(
-          Bench.recent.includes(:user, :ratings, :comments, photos_attachments: :blob)
+        visits = paginate(
+          Visit.order(created_at: :desc)
+               .includes(:user, bench: :discoverer, photos_attachments: :blob)
         )
-        render json: BenchBlueprint.render_as_hash(benches)
+        render json: VisitBlueprint.render_as_hash(visits, view: :with_bench)
       end
     end
   end

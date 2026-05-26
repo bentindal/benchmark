@@ -5,14 +5,13 @@ FactoryBot.define do
     latitude { Faker::Address.latitude }
     longitude { Faker::Address.longitude }
     location_name { "#{Faker::Address.street_name}, #{Faker::Address.city}" }
-    association :user
+    association :discoverer, factory: :user
 
-    after(:build) do |bench|
-      bench.photos.attach(
-        io: StringIO.new("fake image content"),
-        filename: "photo.jpg",
-        content_type: "image/jpeg"
-      )
+    # A bare bench has no visits/photos. Use :with_visit for a realistic, photo-backed bench.
+    trait :with_visit do
+      after(:create) do |bench|
+        create(:visit, bench: bench, user: bench.discoverer)
+      end
     end
   end
 end
